@@ -1,0 +1,111 @@
+version: '3.8'
+
+services:
+  # Infrastructure Services
+  rabbitmq:
+    image: rabbitmq:3-management
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"  # AMQP Protocol
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  postgres:
+    image: postgres:15-alpine
+    hostname: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASS}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:6-alpine
+    hostname: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # --- Microservices (Your Code) ---
+
+  user-service:
+    build: 
+      context: ./user-service # Assumes directory structure
+      dockerfile: Dockerfile
+    hostname: user-service
+    ports:
+      - "8081:8081"
+    environment:
+      # Database connection
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASS}
+      # Redis connection
+      SPRING_DATA_REDIS_HOST: redis
+      # Security (Must match the list in application.properties)
+      SERVICE_AUTH_VALID_KEYS: ${SERVICE_AUTH_VALID_KEYS}
+    depends_on:
+      - postgres
+      - redis
+    restart: on-failure
+
+  api-gateway:
+    build: 
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    hostname: api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS}
+      RABBITMQ_EXCHANGE_NAME: notifications.direct 
+    depends_on:
+      - rabbitmq
+      - user-service 
+    restart: on-failure
+
+  # --- Teammates' Services (Use these standard ports/hostnames) ---
+
+  template-service:
+    build: {context: ./template-service, dockerfile: Dockerfile}
+    hostname: template-service
+    ports: ["8082:8082"]
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+    depends_on: [postgres]
+
+  email-service:
+    build: {context: ./email-service, dockerfile: Dockerfile}
+    hostname: email-service
+    ports: ["8083:8083"]
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SERVICE_USER_URL: http://user-service:8081 # Calls your service
+      SERVICE_TEMPLATE_URL: http://template-service:8082
+    depends_on: [rabbitmq, user-service, template-service]
+
+  push-service:
+    build: {context: ./push-service, dockerfile: Dockerfile}
+    hostname: push-service
+    ports: ["8084:8084"]
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SERVICE_USER_URL: http://user-service:8081
+      SERVICE_TEMPLATE_URL: http://template-service:8082
+    depends_on: [rabbitmq, user-service, template-service]
+      
+volumes:
+  rabbitmq_data:
+  postgres_data:
+  redis_data:

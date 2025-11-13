@@ -1,0 +1,45 @@
+
+# Core Framework
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+
+# Database
+sqlalchemy[asyncpg]==2.0.30
+alembic==1.13.1
+psycopg2-binary==2.9.9
+
+# Caching
+redis[hiredis]==5.0.7
+
+# Message Queue
+aio-pika==9.4.1
+
+# Validation & Serialization
+pydantic==2.7.3
+pydantic-settings==2.3.3
+
+# Logging
+python-json-logger==2.0.7
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.2
+pytest-cov==4.1.0
+httpx==0.25.2
+
+# Code Quality
+flake8==6.1.0
+mypy==1.7.1
+black==23.12.0
+isort==5.13.2
+pylint==3.0.3
+
+# Utilities
+python-dotenv==1.0.0
+httpx==0.25.2
+aiohttp==3.9.1
+
+# Monitoring & Debugging
+opentelemetry-api==1.21.0
+opentelemetry-sdk==1.21.0
+opentelemetry-exporter-jaeger==1.21.0
