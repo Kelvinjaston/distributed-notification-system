@@ -1,0 +1,54 @@
+name: CI/CD Pipeline for Microservices
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build_and_push:
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      IMAGE_REPO: kelvinjaston/notification-system
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+
+      - name: Build and Push Docker Images
+        run: |
+          SERVICES=(api-gateway user-service template-service email-service push-service)
+          
+          for SERVICE in "${SERVICES[@]}"; do
+            TAG="${{ env.IMAGE_REPO }}/$SERVICE:${{ github.sha }}"
+            LATEST_TAG="${{ env.IMAGE_REPO }}/$SERVICE:latest"
+            
+            echo "--- Building and Pushing $SERVICE ---"
+            
+            docker build -t $TAG -t $LATEST_TAG \
+              -f ./$SERVICE/Dockerfile \
+              ./$SERVICE
+              
+            docker push $TAG
+            docker push $LATEST_TAG
+          done
+
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USERNAME }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd /path/to/your/deployment/folder
+            git pull origin main
+            docker compose pull
+            docker compose up -d --remove-orphans
